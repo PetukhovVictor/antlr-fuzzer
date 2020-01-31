@@ -23,11 +23,11 @@ script
     ;
 
 fileAnnotation
-    : ('@file' ':' ('[' unescapedAnnotation+ ']' | unescapedAnnotation) semi)+
+    : '@file' NL* ':' NL* ('[' unescapedAnnotation+ ']' | unescapedAnnotation) NL*
     ;
 
 packageHeader
-    : ('package' identifier semi)?
+    : ('package' identifier semi?)?
     ;
 
 importList
@@ -35,7 +35,7 @@ importList
     ;
 
 importHeader
-    : 'import' identifier ('.' '*' | importAlias)? semi
+    : 'import' identifier ('.' '*' | importAlias)? semi?
     ;
 
 importAlias
@@ -43,11 +43,11 @@ importAlias
     ;
 
 topLevelObject
-    : declaration semis
+    : declaration semis?
     ;
 
 classDeclaration
-    : modifierList? ('class' | 'interface') NL* simpleIdentifier
+    : modifiers? ('class' | 'interface') NL* simpleIdentifier
     (NL* typeParameters)? (NL* primaryConstructor)?
     (NL* ':' NL* delegationSpecifiers)?
     (NL* typeConstraints)?
@@ -55,7 +55,7 @@ classDeclaration
     ;
 
 primaryConstructor
-    : modifierList? ('constructor' NL*)? classParameters
+    : (modifiers? 'constructor' NL*)? classParameters
     ;
 
 classParameters
@@ -63,7 +63,7 @@ classParameters
     ;
 
 classParameter
-    : modifierList? ('val' | 'var')? NL* simpleIdentifier ':' NL* type (NL* '=' NL* expression)?
+    : modifiers? ('val' | 'var')? NL* simpleIdentifier ':' NL* type (NL* '=' NL* expression)?
     ;
 
 delegationSpecifiers
@@ -90,15 +90,16 @@ explicitDelegation
     ;
 
 classBody
-    : '{' NL* classMemberDeclarations? NL* '}'
+    : '{' NL* classMemberDeclarations NL* '}'
     ;
 
 classMemberDeclarations
-    : (classMemberDeclaration semis)* classMemberDeclaration semis?
+    : (classMemberDeclaration semis?)*
     ;
 
 classMemberDeclaration
     : declaration
+    | companionObject
     | anonymousInitializer
     | secondaryConstructor
     ;
@@ -108,7 +109,7 @@ anonymousInitializer
     ;
 
 secondaryConstructor
-    : modifierList? 'constructor' NL* functionValueParameters (NL* ':' NL* constructorDelegationCall)? NL* block?
+    : modifiers? 'constructor' NL* functionValueParameters (NL* ':' NL* constructorDelegationCall)? NL* block?
     ;
 
 constructorDelegationCall
@@ -117,7 +118,7 @@ constructorDelegationCall
     ;
 
 enumClassBody
-    : '{' NL* enumEntries? (NL* ';' NL* classMemberDeclarations?)? NL* '}'
+    : '{' NL* enumEntries? (NL* ';' NL* classMemberDeclarations)? NL* '}'
     ;
 
 enumEntries
@@ -125,15 +126,12 @@ enumEntries
     ;
 
 enumEntry
-    : (modifierList NL*)? simpleIdentifier (NL* valueArguments)? (NL* classBody)?
+    : (modifiers NL*)? simpleIdentifier (NL* valueArguments)? (NL* classBody)?
     ;
 
 functionDeclaration
-    : modifierList?
-    'fun'
-    (NL* typeParameters)?
-    (NL* type NL* '.')? // ?. here is a disambiguation in cases where tokens '?' and '.' go after each other
-    (NL* simpleIdentifier)
+    : modifiers?
+    'fun' (NL* typeParameters)? (NL* receiverType NL* '.')? NL* simpleIdentifier
     NL* functionValueParameters
     (NL* ':' NL* type)?
     (NL* typeConstraints)?
@@ -145,10 +143,14 @@ functionValueParameters
     ;
 
 functionValueParameter
-    : modifierList? parameter (NL* '=' NL* expression)?
+    : modifiers? parameter (NL* '=' NL* expression)?
     ;
 
 parameter
+    : simpleIdentifier NL* ':' NL* type
+    ;
+
+setterParameter
     : simpleIdentifier NL* (':' NL* type)?
     ;
 
@@ -158,16 +160,23 @@ functionBody
     ;
 
 objectDeclaration
-    : modifierList? 'object'
+    : modifiers? 'object'
+    NL* simpleIdentifier
+    (NL* ':' NL* delegationSpecifiers)?
+    (NL* classBody)?
+    ;
+
+companionObject
+    : modifiers? 'companion' NL* 'object'
     (NL* simpleIdentifier)?
     (NL* ':' NL* delegationSpecifiers)?
     (NL* classBody)?
     ;
 
 propertyDeclaration
-    : modifierList? ('val' | 'var')
+    : modifiers? ('val' | 'var')
     (NL* typeParameters)?
-    (NL* type NL* '.')?
+    (NL* receiverType NL* '.')?
     (NL* (multiVariableDeclaration | variableDeclaration))
     (NL* typeConstraints)?
     (NL* ('=' NL* expression | propertyDelegate))?
@@ -192,17 +201,17 @@ propertyDelegate
     ;
 
 getter
-    : modifierList? 'get'
-    | modifierList? 'get' NL* '(' NL* ')' (NL* ':' NL* type)? NL* functionBody
+    : modifiers? 'get'
+    | modifiers? 'get' NL* '(' NL* ')' (NL* ':' NL* type)? NL* functionBody
     ;
 
 setter
-    : modifierList? 'set'
-    | modifierList? 'set' NL* '(' (annotation | parameterModifier)* parameter ')' (NL* ':' NL* type)? NL* functionBody
+    : modifiers? 'set'
+    | modifiers? 'set' NL* '(' (annotation | parameterModifier)* setterParameter ')' (NL* ':' NL* type)? NL* functionBody
     ;
 
 typeAlias
-    : modifierList? 'typealias' NL* simpleIdentifier (NL* typeParameters)? NL* '=' NL* type
+    : modifiers? 'typealias' NL* simpleIdentifier (NL* typeParameters)? NL* '=' NL* type
     ;
 
 typeParameters
@@ -210,43 +219,57 @@ typeParameters
     ;
 
 typeParameter
-    : modifierList? NL* simpleIdentifier (NL* ':' NL* type)?
+    : typeParameterModifiers? NL* simpleIdentifier (NL* ':' NL* type)?
+    ;
+
+typeParameterModifiers
+    : typeParameterModifier+
+    ;
+
+typeParameterModifier
+    : reificationModifier NL*
+    | varianceModifier NL*
+    | annotation
     ;
 
 type
-    : typeModifierList?
+    : typeModifiers?
     ( parenthesizedType
     | nullableType
     | typeReference
     | functionType)
     ;
 
-typeModifierList
-    : (annotation | 'suspend' NL*)+
+typeModifiers
+    : typeModifier+
+    ;
+
+typeModifier
+    : annotation | 'suspend' NL*
     ;
 
 parenthesizedType
-    : '(' type ')'
+    : '(' NL* type NL* ')'
     ;
 
 nullableType
-    : (typeReference | parenthesizedType) NL* '?'+
+    : (typeReference | parenthesizedType) NL* quest+
     ;
 
 typeReference
-    : '(' typeReference ')'
-    | userType
+    : userType
     | 'dynamic' // do we need a separate dynamic support here?
     ;
 
 functionType
-    : (receiverType NL* '.' NL*)? functionTypeParameters  NL* '->' (NL* type)?
+    : (receiverType NL* '.' NL*)? functionTypeParameters NL* '->' NL* type
     ;
 
 receiverType
-    : parenthesizedType
+    : typeModifiers?
+    ( parenthesizedType
     | nullableType
-    | typeReference
+    | typeReference)
     ;
 
 userType
@@ -254,15 +277,14 @@ userType
     ;
 
 parenthesizedUserType
-    : '(' userType ')'
-    | '(' parenthesizedUserType ')'
+    : '(' NL* userType NL* ')'
+    | '(' NL* parenthesizedUserType NL* ')'
     ;
 
 simpleUserType
     : simpleIdentifier (NL* typeArguments)?
     ;
 
-// parameters for functionType
 functionTypeParameters
     : '(' NL* (parameter | type)? (NL* ',' NL* (parameter | type))* NL* ')'
     ;
@@ -284,7 +306,7 @@ statements
     ;
 
 statement
-    : labelDefinition*
+    : (label | annotation)*
     ( declaration
     | assignment
     | loopStatement
@@ -329,7 +351,7 @@ infixOperation
     ;
 
 elvisExpression
-    : infixFunctionCall (NL* '?:' NL* infixFunctionCall)*
+    : infixFunctionCall (NL* elvis NL* infixFunctionCall)*
     ;
 
 infixFunctionCall
@@ -358,13 +380,13 @@ prefixUnaryExpression
 
 unaryPrefix
     : annotation
-    | labelDefinition
+    | label
     | prefixUnaryOperator NL*
     ;
 
 postfixUnaryExpression
-    : primaryExpression // as an alternative for the correct priority
-    | primaryExpression (postfixUnarySuffix)*
+    : primaryExpression
+    | primaryExpression postfixUnarySuffix+
     ;
 
 postfixUnarySuffix
@@ -404,11 +426,11 @@ callSuffix
     ;
 
 annotatedLambda
-    : (annotation | IdentifierAt)* NL* lambdaLiteral
+    : annotation* label? NL* lambdaLiteral
     ;
 
 valueArguments
-    : '(' NL* valueArgument? NL* ')'
+    : '(' NL* ')'
     | '(' NL* valueArgument (NL* ',' NL* valueArgument)* NL* ')'
     ;
 
@@ -417,11 +439,16 @@ typeArguments
     ;
 
 typeProjection
-    : typeProjectionModifierList? type | '*'
+    : typeProjectionModifiers? type | '*'
     ;
 
-typeProjectionModifierList
-    : varianceAnnotation+
+typeProjectionModifiers
+    : typeProjectionModifier+
+    ;
+
+typeProjectionModifier
+    : varianceModifier NL*
+    | annotation
     ;
 
 valueArgument
@@ -500,11 +527,11 @@ multiLineStringExpression
 
 lambdaLiteral // anonymous functions?
     : LCURL NL* statements NL* RCURL
-    | LCURL NL* lambdaParameters NL* ARROW NL* statements NL* '}'
+    | LCURL NL* lambdaParameters? NL* ARROW NL* statements NL* '}'
     ;
 
 lambdaParameters
-    : lambdaParameter? (NL* COMMA NL* lambdaParameter)*
+    : lambdaParameter (NL* COMMA NL* lambdaParameter)*
     ;
 
 lambdaParameter
@@ -532,12 +559,12 @@ objectLiteral
     ;
 
 thisExpression
-    : 'this' AtIdentifier?
+    : 'this'
     | THIS_AT
     ;
 
 superExpression
-    : 'super' ('<' NL* type NL* '>')? AtIdentifier?
+    : 'super' ('<' NL* type NL* '>')? ('@' simpleIdentifier)?
     | SUPER_AT
     ;
 
@@ -575,15 +602,11 @@ typeTest
     ;
 
 tryExpression
-    : 'try' NL* block (NL* catchBlock)* (NL* finallyBlock)?
+    : 'try' NL* block ((NL* catchBlock)+ (NL* finallyBlock)? | NL* finallyBlock)
     ;
 
 catchBlock
-    : 'catch' NL* '(' catchParameter ')' NL* block
-    ;
-
-catchParameter
-    : annotation* simpleIdentifier ':' (userType | parenthesizedUserType)
+    : 'catch' NL* '(' annotation* simpleIdentifier ':' userType ')' NL* block
     ;
 
 finallyBlock
@@ -617,7 +640,7 @@ jumpExpression
     ;
 
 callableReference // ?:: here is not an actual operator, it's just a lexer hack to avoid (?: + :) vs (? + ::) ambiguity
-    : (receiverType? NL* ('::' | '?::') NL* (simpleIdentifier | 'class'))
+    : (receiverType? NL* '::' NL* (simpleIdentifier | 'class'))
     ;
 
 assignmentAndOperator
@@ -670,20 +693,20 @@ prefixUnaryOperator
     | '--'
     | '-'
     | '+'
-    | '!'
+    | excl
     ;
 
 postfixUnaryOperator
     : '++'
     | '--'
-    | '!!'
+    | EXCL_NO_WS excl
     ;
 
 memberAccessOperator
-    : '.' | '?' /* XXX: no WS here */ '.' | '::'
+    : '.' | safeNav | '::'
     ;
 
-modifierList
+modifiers
     : (annotation | modifier)+
     ;
 
@@ -691,13 +714,10 @@ modifier
     : (classModifier
     | memberModifier
     | visibilityModifier
-    | varianceAnnotation
     | functionModifier
     | propertyModifier
-    | objectModifier
     | inheritanceModifier
     | parameterModifier
-    | typeParameterModifier
     | platformModifier) NL*
     ;
 
@@ -721,7 +741,7 @@ visibilityModifier
     | 'protected'
     ;
 
-varianceAnnotation
+varianceModifier
     : 'in'
     | 'out'
     ;
@@ -739,10 +759,6 @@ propertyModifier
     : 'const'
     ;
 
-objectModifier
-    : 'companion'
-    ;
-
 inheritanceModifier
     : 'abstract'
     | 'final'
@@ -755,7 +771,7 @@ parameterModifier
     | 'crossinline'
     ;
 
-typeParameterModifier
+reificationModifier
     : 'reified'
     ;
 
@@ -764,7 +780,7 @@ platformModifier
     | 'actual'
     ;
 
-labelDefinition
+label
     : IdentifierAt NL*
     ;
 
@@ -773,18 +789,17 @@ annotation
     ;
 
 singleAnnotation
-    : annotationUseSiteTarget ':' NL* unescapedAnnotation
-    | AtIdentifier (NL* '.' simpleIdentifier)* typeArguments? valueArguments?
+    : annotationUseSiteTarget NL* ':' NL* unescapedAnnotation
+    | '@' unescapedAnnotation
     ;
 
 multiAnnotation
-    : annotationUseSiteTarget ':' '[' unescapedAnnotation+ ']'
-    | '@[' unescapedAnnotation+ ']'
+    : annotationUseSiteTarget NL* ':' NL* '[' unescapedAnnotation+ ']'
+    | '@' '[' unescapedAnnotation+ ']'
     ;
 
 annotationUseSiteTarget
     : '@field'
-    | '@file'
     | '@property'
     | '@get'
     | '@set'
@@ -795,7 +810,8 @@ annotationUseSiteTarget
     ;
 
 unescapedAnnotation
-    : identifier typeArguments? valueArguments?
+    : constructorInvocation
+    | userType
     ;
 
 simpleIdentifier
@@ -846,7 +862,25 @@ identifier
     ;
 
 shebangLine
-    : ShebangLine
+    : ShebangLine NL+
+    ;
+
+quest
+    : QUEST_NO_WS
+    | QUEST_WS
+    ;
+
+elvis
+    : QUEST_NO_WS ':'
+    ;
+
+safeNav
+    : QUEST_NO_WS '.'
+    ;
+
+excl
+    : EXCL_NO_WS
+    | EXCL_WS
     ;
 
 semi
